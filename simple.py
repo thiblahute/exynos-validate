@@ -25,6 +25,14 @@ import subprocess
 
 
 TEST_MANAGER = "validate"
+CDIR = os.path.abspath(os.path.dirname(__file__))
+EXPECTED_ISSUES = {r'validate.launch_pipeline.v4l2.convert.*.to.y42b.play_15s':
+                   [
+                       {'level': 'critical',
+                        'summary': 'Compared images where not similar enough'
+                        }
+                   ]}
+
 
 def get_element_name(elformat, _filter=None):
     for i in range(10):
@@ -37,12 +45,7 @@ def get_element_name(elformat, _filter=None):
             continue
 
 
-def setup_tests(test_manager, options):
-    cdir = os.path.abspath(os.path.dirname(__file__))
-    print("Setting up tests to validate v4l2 playback")
-    pipelines_descriptions = []
-    valid_scenarios = ["play_15s"]
-
+def add_format_conversion_tests(pipelines_descriptions):
     converter = get_element_name('v4l2video%dconvert')
     if not converter:
         print("Could not find any v4l2 converter!")
@@ -50,22 +53,29 @@ def setup_tests(test_manager, options):
 
     formats = ["BGRx", "YUY2", "UYVY", "YVYU", "Y42B", "NV16", "NV61", "YV12",
                               "NV12", "NV21", "I420"]
-    pipelines_descriptions = []
-    conv = get_element_name ("v4l2video%sconvert")
-    config = open(os.path.join(cdir, 'check_frames.config'), mode='w')
+    config = open(os.path.join(CDIR, 'check_frames.config'), mode='w')
     config.write('ssim, element-classification="Filter/Converter/Video/Scaler",'
-                 ' reference-images-dir=%s/medias/refs/\n' % cdir)
+                 ' reference-images-dir=%s/medias/refs/white/\n' % CDIR)
     config.flush()
     for inf in formats:
         for outf in formats:
-            pipelines_descriptions.append(('simple.%s.to.%s' % (inf.lower(), outf.lower()),
+            pipelines_descriptions.append(('v4l2.convert.%s.to.%s' % (inf.lower(), outf.lower()),
                                            "videotestsrc pattern=white num-buffers=1 ! "
                                            "video/x-raw,format=%s ! %s ! video/x-raw,format=%s ! fakesink" % (
-                                               inf, conv, outf),
+                                               inf, converter, outf),
                                                {'extra_env_vars': {'GST_VALIDATE_CONFIG': config.name},
-                                                'scenarios': valid_scenarios},
+                                                'scenarios': ["play_15s"]},
                                             ))
 
+
+
+def setup_tests(test_manager, options):
+    print("Setting up tests to validate v4l2 playback")
+    valid_scenarios = ["play_15s"]
+    pipelines_descriptions = []
+
+    add_format_conversion_tests(pipelines_descriptions)
+    test_manager.add_expected_issues(EXPECTED_ISSUES)
     test_manager.add_generators(test_manager.GstValidatePipelineTestsGenerator
                                 ("validate_elements", test_manager,
                                  pipelines_descriptions=pipelines_descriptions,
