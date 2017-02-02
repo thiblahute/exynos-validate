@@ -68,6 +68,34 @@ def add_format_conversion_tests(pipelines_descriptions):
                                             ))
 
 
+def add_playback_tests(pipelines_descriptions):
+    converter = get_element_name('v4l2video%dconvert')
+    if not converter:
+        print("Could not find any v4l2 converter!")
+        return False
+
+    decoder = get_element_name('v4l2video%ddec')
+    if not decoder:
+        print("Could not find any v4l2 converter!")
+        return False
+
+    for f in ['mp4/video_only_colorimerty_bt601.mp4']:
+        fpath = '%s/medias/%s' % (CDIR, f)
+        config = open(os.path.join(CDIR, f.replace('/', '-') + '-check_frames.config'), mode='w')
+        config.write('ssim, element-classification="Codec/Decoder/Video",'
+                    ' reference-images-dir=%s\n' % '%s/medias/refs/%s' % (CDIR, f))
+        config.flush()
+        pipelines_descriptions.append(
+            ('v4l2.decoding.%s' % (f.lower().replace('/', '-')),
+             'filesrc location=%s ! qtdemux ! h264parse ! %s ! %s ! fakesink' % (
+                fpath, decoder, converter),
+             {
+                 'extra_env_vars': {'GST_VALIDATE_CONFIG': config.name},
+                 'scenarios': ["play_15s"]
+             },
+            )
+        )
+
 
 def setup_tests(test_manager, options):
     print("Setting up tests to validate v4l2 playback")
@@ -75,6 +103,7 @@ def setup_tests(test_manager, options):
     pipelines_descriptions = []
 
     add_format_conversion_tests(pipelines_descriptions)
+    add_playback_tests(pipelines_descriptions)
     test_manager.add_expected_issues(EXPECTED_ISSUES)
     test_manager.add_generators(test_manager.GstValidatePipelineTestsGenerator
                                 ("validate_elements", test_manager,
